@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>남도마켓 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d12;--s1:#13161e;--s2:#191d28;--s3:#1f2436;
+  --b1:#232840;--b2:#2d3450;
+  --ac:#5b8dee;--ac2:#8b6ef5;--ac3:#f06292;--ac4:#4dd0a8;--ac5:#ffb74d;
+  --tx:#dde3f0;--tx2:#7a859e;--tx3:#3d4660;
+  --g:#4dd0a8;--r:#f06292;--y:#ffd54f;
+  --font:'Noto Sans KR',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column}
+
+/* ── TOPBAR ── */
+#topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 28px;background:var(--s1);
+  border-bottom:1px solid var(--b1);
+  position:sticky;top:0;z-index:200;gap:16px;
+}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-mark{
+  width:34px;height:34px;border-radius:9px;
+  background:linear-gradient(135deg,var(--ac),var(--ac2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:900;color:#fff;
+}
+.logo-name{font-size:15px;font-weight:700;letter-spacing:-.4px}
+.logo-sub{font-size:11px;color:var(--tx2);margin-top:1px}
+#uploadZone{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 16px;border-radius:8px;
+  border:1.5px dashed var(--b2);color:var(--tx2);
+  font-size:12px;cursor:pointer;transition:all .2s;
+  background:none;
+}
+#uploadZone:hover,#uploadZone.drag{border-color:var(--ac);color:var(--ac);background:rgba(91,141,238,.07)}
+#uploadZone input{display:none}
+.upload-icon{font-size:16px}
+#statusBadge{
+  font-size:11px;font-family:var(--mono);
+  padding:4px 10px;border-radius:20px;white-space:nowrap;
+  background:rgba(77,208,168,.1);border:1px solid rgba(77,208,168,.25);color:var(--g);
+}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR NAV ── */
+#sidebar{
+  width:200px;flex-shrink:0;background:var(--s1);
+  border-right:1px solid var(--b1);
+  padding:16px 0;overflow-y:auto;
+}
+.nav-section{padding:0 12px 8px;font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:8px}
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 16px;font-size:13px;font-weight:500;
+  color:var(--tx2);cursor:pointer;border-radius:0;
+  transition:all .15s;border-left:2px solid transparent;
+}
+.nav-item:hover{color:var(--tx);background:rgba(255,255,255,.03)}
+.nav-item.active{color:var(--ac);border-left-color:var(--ac);background:rgba(91,141,238,.07)}
+.nav-icon{font-size:15px;width:18px;text-align:center}
+
+/* ── MAIN CONTENT ── */
+#main{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+#main::-webkit-scrollbar{width:4px}
+#main::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+.page{display:none;flex-direction:column;gap:20px}
+.page.active{display:flex}
+
+/* ── KPI GRID ── */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.kpi{
+  background:var(--s1);border:1px solid var(--b1);
+  border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;
+}
+.kpi::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--kc,var(--ac));border-radius:12px 12px 0 0;
+}
+.kpi-lbl{font-size:10px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.kpi-val{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-1px;line-height:1}
+.kpi-sub{font-size:11px;color:var(--tx3);margin-top:6px}
+.up{color:var(--g)}.down{color:var(--r)}
+
+/* ── CARDS ── */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:20px 22px}
+.card-title{font-size:13px;font-weight:700;margin-bottom:3px}
+.card-sub{font-size:11px;color:var(--tx2);margin-bottom:16px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+canvas{max-height:280px}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{padding:8px 12px;font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--b1);text-align:left;white-space:nowrap}
+.tbl td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--tx2)}
+.tbl tr:hover td{background:rgba(255,255,255,.02);color:var(--tx)}
+.tbl tr:last-child td{border:none}
+.num{font-family:var(--mono);font-size:11px;text-align:right}
+.tscroll{max-height:360px;overflow-y:auto}
+.tscroll::-webkit-scrollbar{width:3px}
+.tscroll::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.rbadge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.r1{background:rgba(255,212,59,.13);color:#ffd54f}
+.r2{background:rgba(180,180,180,.1);color:#9aa0b0}
+.r3{background:rgba(255,150,80,.1);color:#ffb74d}
+.rn{background:rgba(255,255,255,.05);color:var(--tx3)}
+.bar-bg{height:3px;background:var(--b2);border-radius:2px;margin-top:3px;min-width:60px}
+.bar-fg{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--ac),var(--ac2))}
+
+/* ── EVENT CARDS ── */
+.ev-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.ev-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:12px;
+  padding:16px 18px;cursor:pointer;transition:all .2s;position:relative;
+}
+.ev-card:hover{border-color:var(--ac);transform:translateY(-2px);box-shadow:0 8px 24px rgba(91,141,238,.1)}
+.ev-card.sel{border-color:var(--ac);background:rgba(91,141,238,.05)}
+.ev-name{font-size:13px;font-weight:700;margin-bottom:4px;line-height:1.3}
+.ev-date{font-size:10px;color:var(--tx3);font-family:var(--mono);margin-bottom:10px}
+.ev-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ev-stat-l{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.4px}
+.ev-stat-v{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--tx);margin-top:1px}
+.gpill{position:absolute;top:14px;right:14px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.gpos{background:rgba(77,208,168,.1);color:var(--g)}.gneg{background:rgba(240,98,146,.1);color:var(--r)}.gna{background:rgba(255,255,255,.05);color:var(--tx3)}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{
+  background:var(--s1);border:1px solid var(--b1);border-radius:12px;
+  padding:22px;margin-top:14px;display:none;
+}
+.detail-panel.open{display:block}
+.detail-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.detail-title{font-size:16px;font-weight:700}
+.close-x{background:rgba(255,255,255,.05);border:1px solid var(--b1);color:var(--tx2);width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.close-x:hover{background:rgba(255,255,255,.1);color:var(--tx)}
+.detail-body{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+/* ── AI CHAT PANEL ── */
+#aiPanel{
+  width:340px;flex-shrink:0;background:var(--s1);
+  border-left:1px solid var(--b1);
+  display:flex;flex-direction:column;
+}
+#aiHeader{
+  padding:14px 18px;border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.ai-title-row{display:flex;align-items:center;gap:8px}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 6px var(--g)}
+.ai-title{font-size:13px;font-weight:700}
+.ai-sub{font-size:11px;color:var(--tx2);margin-top:1px}
+#aiToggle{
+  background:none;border:1px solid var(--b2);color:var(--tx2);
+  padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;
+}
+#aiToggle:hover{border-color:var(--ac);color:var(--ac)}
+#chatMessages{
+  flex:1;overflow-y:auto;padding:14px 16px;
+  display:flex;flex-direction:column;gap:10px;
+}
+#chatMessages::-webkit-scrollbar{width:3px}
+#chatMessages::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.msg{max-width:100%;font-size:12px;line-height:1.55}
+.msg-user{
+  align-self:flex-end;background:rgba(91,141,238,.15);
+  border:1px solid rgba(91,141,238,.25);
+  border-radius:10px 10px 2px 10px;padding:8px 12px;color:var(--tx);
+}
+.msg-ai{
+  align-self:flex-start;background:var(--s2);
+  border:1px solid var(--b1);
+  border-radius:2px 10px 10px 10px;padding:8px 12px;color:var(--tx2);
+}
+.msg-ai strong{color:var(--tx);font-weight:600}
+.msg-thinking{color:var(--tx3);font-style:italic;font-size:11px}
+.hint-chips{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.chip{
+  background:var(--s2);border:1px solid var(--b2);
+  border-radius:8px;padding:6px 10px;font-size:11px;
+  cursor:pointer;color:var(--tx2);transition:all .15s;text-align:left;
+}
+.chip:hover{border-color:var(--ac);color:var(--ac);background:rgba(91,141,238,.07)}
+#chatInputRow{
+  padding:12px 14px;border-top:1px solid var(--b1);
+  display:flex;gap:8px;align-items:flex-end;
+}
+#chatInput{
+  flex:1;background:var(--s2);border:1px solid var(--b2);
+  border-radius:8px;padding:8px 11px;color:var(--tx);
+  font-family:var(--font);font-size:12px;resize:none;
+  max-height:80px;line-height:1.45;
+}
+#chatInput:focus{outline:none;border-color:var(--ac)}
+#chatInput::placeholder{color:var(--tx3)}
+#sendBtn{
+  background:var(--ac);border:none;color:#fff;
+  width:32px;height:32px;border-radius:8px;
+  cursor:pointer;font-size:16px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .15s;
+}
+#sendBtn:hover{opacity:.85}
+#sendBtn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── APPLIED CHANGES LOG ── */
+#changesLog{font-size:10px;color:var(--tx3);padding:4px 16px 8px;font-family:var(--mono)}
+
+/* ── PALETTE ── */
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-mark">남</div>
+    <div>
+      <div class="logo-name">남도마켓 대시보드</div>
+      <div class="logo-sub">기획전 성과 분석</div>
+    </div>
+  </div>
+  <label id="uploadZone">
+    <span class="upload-icon">📂</span>
+    <span id="uploadLabel">엑셀 업로드 (기획전_리절트.xlsx)</span>
+    <input type="file" accept=".xlsx,.xls" onchange="handleUpload(this)">
+  </label>
+  <span id="statusBadge">● 데이터 로드됨</span>
+</div>
+
+<div id="app">
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="nav-section">분석</div>
+    <div class="nav-item active" onclick="goPage('overview',this)">
+      <span class="nav-icon">📊</span>전체 현황
+    </div>
+    <div class="nav-item" onclick="goPage('events',this)">
+      <span class="nav-icon">🎯</span>기획전 성과
+    </div>
+    <div class="nav-section">데이터</div>
+    <div class="nav-item" onclick="goPage('stores',this)">
+      <span class="nav-icon">🏪</span>매장 분석
+    </div>
+    <div class="nav-item" onclick="goPage('categories',this)">
+      <span class="nav-icon">📦</span>카테고리
+    </div>
+    <div class="nav-item" onclick="goPage('products',this)">
+      <span class="nav-icon">🛒</span>상품 랭킹
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- PAGE: 전체 현황 -->
+    <div class="page active" id="page-overview">
+      <div class="kpi-row" id="kpiRow"></div>
+      <div class="card">
+        <div class="card-title">일별 매출 트렌드 <span style="font-size:10px;font-weight:400;color:var(--tx3)">최근 60일</span></div>
+        <div class="card-sub">일별 매출 · 수량 · 전일 대비 증감</div>
+        <canvas id="dailyChart" height="110"></canvas>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">주간 매출 트렌드</div>
+          <div class="card-sub">주차별 집계 (최근 20주)</div>
+          <canvas id="weeklyChart" height="190"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">카테고리별 매출 비중</div>
+          <div class="card-sub">TOP 8 점유율</div>
+          <div style="display:flex;align-items:center;justify-content:center">
+            <canvas id="catDoughnut" width="240" height="240" style="max-width:240px;max-height:240px"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: 기획전 -->
+    <div class="page" id="page-events">
+      <div class="ev-grid" id="evGrid"></div>
+      <div class="detail-panel" id="detailPanel">
+        <div class="detail-hd">
+          <div class="detail-title" id="detailTitle"></div>
+          <button class="close-x" onclick="closeDetail()">✕</button>
+        </div>
+        <div class="detail-body">
+          <div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:12px">상품별 매출 TOP 15</div>
+            <canvas id="evProdChart" height="280"></canvas>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:12px">상품 상세</div>
+            <div class="tscroll">
+              <table class="tbl"><thead><tr><th>#</th><th>상품명</th><th class="num">매출</th><th class="num">수량</th></tr></thead>
+              <tbody id="evProdTbl"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: 매장 -->
+    <div class="page" id="page-stores">
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">매장별 매출 TOP 20</div>
+          <div class="card-sub">전체 기간 누적 매출</div>
+          <canvas id="storeBar" height="280"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">매장 점유율 TOP 10</div>
+          <div class="card-sub"></div>
+          <div style="display:flex;align-items:center;justify-content:center">
+            <canvas id="storePie" width="220" height="220" style="max-width:220px;max-height:220px"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">매장 상세 데이터</div>
+        <div class="card-sub">TOP 20 매장</div>
+        <table class="tbl"><thead><tr><th>순위</th><th>매장명</th><th class="num">매출</th><th class="num">수량</th><th class="num">비중</th><th style="min-width:80px">점유율</th></tr></thead>
+        <tbody id="storeTbl"></tbody></table>
+      </div>
+    </div>
+
+    <!-- PAGE: 카테고리 -->
+    <div class="page" id="page-categories">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">카테고리별 매출</div>
+          <div class="card-sub">TOP 15</div>
+          <canvas id="catBar" height="260"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">카테고리별 판매 수량</div>
+          <div class="card-sub">TOP 15</div>
+          <canvas id="catQtyBar" height="260"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">카테고리 상세</div>
+        <table class="tbl"><thead><tr><th>순위</th><th>카테고리</th><th class="num">매출</th><th class="num">수량</th><th class="num">비중</th><th style="min-width:80px">점유율</th></tr></thead>
+        <tbody id="catTbl"></tbody></table>
+      </div>
+    </div>
+
+    <!-- PAGE: 상품 -->
+    <div class="page" id="page-products">
+      <div class="card">
+        <div class="card-title">상품별 매출 TOP 30</div>
+        <table class="tbl"><thead><tr><th>순위</th><th>상품ID</th><th>상품명</th><th>매장</th><th>카테고리</th><th class="num">매출</th><th class="num">수량</th></tr></thead>
+        <tbody id="prodTbl"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI CHAT PANEL -->
+  <div id="aiPanel">
+    <div id="aiHeader">
+      <div>
+        <div class="ai-title-row"><div class="ai-dot"></div><div class="ai-title">AI 바이브 코딩</div></div>
+        <div class="ai-sub">대화로 대시보드 수정</div>
+      </div>
+      <button id="aiToggle" onclick="toggleAI()">숨기기</button>
+    </div>
+    <div id="chatMessages">
+      <div class="msg msg-ai">
+        안녕하세요! 대시보드를 자유롭게 수정할 수 있어요 ✨<br><br>
+        아래 예시를 클릭하거나 직접 입력해보세요.
+      </div>
+      <div class="hint-chips">
+        <button class="chip" onclick="quickPrompt(this.textContent)">📊 매출 차트 색깔 초록색으로 바꿔줘</button>
+        <button class="chip" onclick="quickPrompt(this.textContent)">🎯 기획전 중 매출 TOP 3만 하이라이트해줘</button>
+        <button class="chip" onclick="quickPrompt(this.textContent)">📦 카테고리 차트에 수량도 같이 보여줘</button>
+        <button class="chip" onclick="quickPrompt(this.textContent)">🌈 다크 테마 더 진하게 바꿔줘</button>
+        <button class="chip" onclick="quickPrompt(this.textContent)">📈 주간 차트 막대 그래프로 바꿔줘</button>
+        <button class="chip" onclick="quickPrompt(this.textContent)">💰 매출 단위를 만원으로 표시해줘</button>
+      </div>
+    </div>
+    <div id="changesLog"></div>
+    <div id="chatInputRow">
+      <textarea id="chatInput" placeholder="대시보드 수정 요청..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+      <button id="sendBtn" onclick="sendChat()">↑</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── EMBEDDED DATA ───────────────────────────────────────────────
+const INIT_DATA = {"summary": {"total_rev": 13578991032, "total_orders": 479629, "total_qty": 5280920, "avg_daily_rev": 34377192, "rev7": 329074730, "rev7_growth": 1.3}, "daily": [{"d": "2026-03-23", "r": 61486930, "q": 26520, "o": 2131, "g": 2.7064}, {"d": "2026-03-24", "r": 56473705, "q": 21079, "o": 1809, "g": -0.0815}, {"d": "2026-03-25", "r": 63774390, "q": 27516, "o": 1910, "g": 0.1293}, {"d": "2026-03-26", "r": 39031600, "q": 29296, "o": 1450, "g": -0.388}, {"d": "2026-03-27", "r": 36482450, "q": 16361, "o": 1237, "g": -0.0653}, {"d": "2026-03-28", "r": 8453450, "q": 4054, "o": 384, "g": -0.7683}, {"d": "2026-03-29", "r": 16397480, "q": 7862, "o": 895, "g": 0.9397}, {"d": "2026-03-30", "r": 55160500, "q": 23824, "o": 2271, "g": 2.364}, {"d": "2026-03-31", "r": 43474650, "q": 23260, "o": 1796, "g": -0.2119}, {"d": "2026-04-01", "r": 42809820, "q": 23657, "o": 1755, "g": -0.0153}, {"d": "2026-04-02", "r": 59343480, "q": 27469, "o": 1967, "g": 0.3862}, {"d": "2026-04-03", "r": 35105860, "q": 24559, "o": 1245, "g": -0.4084}, {"d": "2026-04-04", "r": 12973200, "q": 5474, "o": 629, "g": -0.6305}, {"d": "2026-04-05", "r": 22853930, "q": 7243, "o": 1020, "g": 0.7616}, {"d": "2026-04-06", "r": 67024980, "q": 35852, "o": 2403, "g": 1.9328}, {"d": "2026-04-07", "r": 43672550, "q": 22890, "o": 1896, "g": -0.3484}, {"d": "2026-04-08", "r": 62296750, "q": 25513, "o": 2126, "g": 0.4265}, {"d": "2026-04-09", "r": 47696270, "q": 22490, "o": 1506, "g": -0.2344}, {"d": "2026-04-10", "r": 26109850, "q": 10676, "o": 1195, "g": -0.4526}, {"d": "2026-04-11", "r": 12751400, "q": 6315, "o": 638, "g": -0.5116}, {"d": "2026-04-12", "r": 22682415, "q": 10887, "o": 1076, "g": 0.7788}, {"d": "2026-04-13", "r": 60147800, "q": 20742, "o": 2433, "g": 1.6517}, {"d": "2026-04-14", "r": 52657480, "q": 31860, "o": 1935, "g": -0.1245}, {"d": "2026-04-15", "r": 51709483, "q": 20601, "o": 2088, "g": -0.018}, {"d": "2026-04-16", "r": 65391080, "q": 31231, "o": 2146, "g": 0.2646}, {"d": "2026-04-17", "r": 35873100, "q": 16718, "o": 1484, "g": -0.4514}, {"d": "2026-04-18", "r": 10823820, "q": 4882, "o": 485, "g": -0.6983}, {"d": "2026-04-19", "r": 24415750, "q": 13305, "o": 1083, "g": 1.2557}, {"d": "2026-04-20", "r": 60605090, "q": 25122, "o": 2322, "g": 1.4822}, {"d": "2026-04-21", "r": 47081005, "q": 27842, "o": 1874, "g": -0.2232}, {"d": "2026-04-22", "r": 48922720, "q": 29298, "o": 1943, "g": 0.0391}, {"d": "2026-04-23", "r": 53256020, "q": 26391, "o": 1943, "g": 0.0886}, {"d": "2026-04-24", "r": 42324480, "q": 21423, "o": 1539, "g": -0.2053}, {"d": "2026-04-25", "r": 12063600, "q": 4333, "o": 699, "g": -0.715}, {"d": "2026-04-26", "r": 29982100, "q": 13391, "o": 1436, "g": 1.4853}, {"d": "2026-04-27", "r": 96091530, "q": 55627, "o": 3231, "g": 2.205}, {"d": "2026-04-28", "r": 73656500, "q": 76522, "o": 2939, "g": -0.2335}, {"d": "2026-04-29", "r": 67169810, "q": 42724, "o": 2448, "g": -0.0881}, {"d": "2026-04-30", "r": 63280807, "q": 21418, "o": 1346, "g": -0.0579}, {"d": "2026-05-01", "r": 7728900, "q": 6779, "o": 343, "g": -0.8779}, {"d": "2026-05-02", "r": 14352750, "q": 6428, "o": 597, "g": 0.857}, {"d": "2026-05-03", "r": 29182200, "q": 18412, "o": 1209, "g": 1.0332}, {"d": "2026-05-04", "r": 61683085, "q": 27687, "o": 2306, "g": 1.1137}, {"d": "2026-05-05", "r": 26276530, "q": 9821, "o": 1087, "g": -0.574}, {"d": "2026-05-06", "r": 66110590, "q": 31451, "o": 2481, "g": 1.516}, {"d": "2026-05-07", "r": 59741190, "q": 37211, "o": 2301, "g": -0.0963}, {"d": "2026-05-08", "r": 40972750, "q": 17469, "o": 1562, "g": -0.3142}, {"d": "2026-05-09", "r": 13226700, "q": 5191, "o": 599, "g": -0.6772}, {"d": "2026-05-10", "r": 31839520, "q": 15192, "o": 1399, "g": 1.4072}, {"d": "2026-05-11", "r": 70379820, "q": 36884, "o": 2657, "g": 1.2105}, {"d": "2026-05-12", "r": 70955460, "q": 43901, "o": 1861, "g": 0.0082}, {"d": "2026-05-13", "r": 44610250, "q": 43012, "o": 1715, "g": -0.3713}, {"d": "2026-05-14", "r": 52955590, "q": 34007, "o": 1647, "g": 0.1871}, {"d": "2026-05-15", "r": 40354850, "q": 16605, "o": 1229, "g": -0.2379}, {"d": "2026-05-16", "r": 12300600, "q": 4579, "o": 576, "g": -0.6952}, {"d": "2026-05-17", "r": 30843210, "q": 17121, "o": 1330, "g": 1.5075}, {"d": "2026-05-18", "r": 70457190, "q": 46958, "o": 2401, "g": 1.2844}, {"d": "2026-05-19", "r": 68095040, "q": 35823, "o": 2495, "g": -0.0335}, {"d": "2026-05-20", "r": 46102840, "q": 42418, "o": 1942, "g": -0.323}, {"d": "2026-05-21", "r": 60921000, "q": 31930, "o": 2194, "g": 0.3214}], "weekly": [{"d": "2025W17", "s": "2025-04-22", "e": "2025-04-27", "r": 187965530, "q": 52030, "g": 1.114822505162857}, {"d": "2025W18", "s": "2025-04-28", "e": "2025-05-04", "r": 252859675, "q": 64215, "g": 0.3452449233644062}, {"d": "2025W19", "s": "2025-05-05", "e": "2025-05-11", "r": 244653030, "q": 67893, "g": -0.03245533318034993}, {"d": "2025W20", "s": "2025-05-12", "e": "2025-05-18", "r": 220715120, "q": 53708, "g": -0.09784432263111559}, {"d": "2025W21", "s": "2025-05-19", "e": "2025-05-25", "r": 205195900, "q": 74664, "g": -0.07031335234305651}, {"d": "2025W22", "s": "2025-05-26", "e": "2025-06-01", "r": 285836810, "q": 71643, "g": 0.3929947430723518}, {"d": "2025W23", "s": "2025-06-02", "e": "2025-06-08", "r": 151046580, "q": 53083, "g": -0.4715635820312996}, {"d": "2025W24", "s": "2025-06-09", "e": "2025-06-15", "r": 200635220, "q": 68502, "g": 0.3283003163659846}, {"d": "2025W25", "s": "2025-06-16", "e": "2025-06-22", "r": 205882935, "q": 59392, "g": 0.02615550250848281}, {"d": "2025W26", "s": "2025-06-23", "e": "2025-06-29", "r": 171303330, "q": 66769, "g": -0.16795760658842365}, {"d": "2025W27", "s": "2025-06-30", "e": "2025-07-06", "r": 241284770, "q": 68317, "g": 0.40852352374002304}, {"d": "2025W28", "s": "2025-07-07", "e": "2025-07-13", "r": 199721870, "q": 64419, "g": -0.1722566244027752}, {"d": "2025W29", "s": "2025-07-14", "e": "2025-07-20", "r": 215173230, "q": 69642, "g": 0.07736438678448183}, {"d": "2025W30", "s": "2025-07-21", "e": "2025-07-27", "r": 255928085, "q": 93099, "g": 0.18940485765817616}, {"d": "2025W31", "s": "2025-07-28", "e": "2025-08-03", "r": 274307110, "q": 98021, "g": 0.0718132400357702}, {"d": "2025W32", "s": "2025-08-04", "e": "2025-08-10", "r": 121184050, "q": 45157, "g": -0.5582176123688518}, {"d": "2025W33", "s": "2025-08-11", "e": "2025-08-17", "r": 205583715, "q": 78856, "g": 0.6964585273392002}, {"d": "2025W34", "s": "2025-08-18", "e": "2025-08-24", "r": 254047455, "q": 86186, "g": 0.2357372518538251}, {"d": "2025W35", "s": "2025-08-25", "e": "2025-08-31", "r": 263470905, "q": 77116, "g": 0.03709326668909161}, {"d": "2025W36", "s": "2025-09-01", "e": "2025-09-07", "r": 212172920, "q": 71103, "g": -0.194700758324719}, {"d": "2025W37", "s": "2025-09-08", "e": "2025-09-14", "r": 216294440, "q": 56339, "g": 0.01942528763802657}, {"d": "2025W38", "s": "2025-09-15", "e": "2025-09-21", "r": 203642560, "q": 65094, "g": -0.058493782826780014}, {"d": "2025W39", "s": "2025-09-22", "e": "2025-09-28", "r": 298861890, "q": 89361, "g": 0.46758069629452703}, {"d": "2025W40", "s": "2025-09-29", "e": "2025-10-05", "r": 203039615, "q": 56463, "g": -0.32062393435308867}, {"d": "2025W41", "s": "2025-10-06", "e": "2025-10-12", "r": 128154960, "q": 40850, "g": -0.3688179521025983}, {"d": "2025W42", "s": "2025-10-13", "e": "2025-10-19", "r": 201817530, "q": 68041, "g": 0.5747929693864365}, {"d": "2025W43", "s": "2025-10-20", "e": "2025-10-26", "r": 204852160, "q": 54525, "g": 0.0150365035187974}, {"d": "2025W44", "s": "2025-10-27", "e": "2025-11-02", "r": 266782412, "q": 61913, "g": 0.3023168122806223}, {"d": "2025W45", "s": "2025-11-03", "e": "2025-11-09", "r": 258593160, "q": 62396, "g": -0.030696371393478517}, {"d": "2025W46", "s": "2025-11-10", "e": "2025-11-16", "r": 211267695, "q": 59249, "g": -0.18301127918464666}, {"d": "2025W47", "s": "2025-11-17", "e": "2025-11-23", "r": 231948340, "q": 68519, "g": 0.09788834492656343}, {"d": "2025W48", "s": "2025-11-24", "e": "2025-11-30", "r": 211808555, "q": 55439, "g": -0.08682875247134772}, {"d": "2025W49", "s": "2025-12-01", "e": "2025-12-07", "r": 200428275, "q": 54687, "g": -0.053729085683059404}, {"d": "2025W50", "s": "2025-12-08", "e": "2025-12-14", "r": 209778975, "q": 64920, "g": 0.04665359715339565}, {"d": "2025W51", "s": "2025-12-15", "e": "2025-12-21", "r": 309223740, "q": 70433, "g": 0.474045432818041}, {"d": "2025W52", "s": "2025-12-22", "e": "2025-12-28", "r": 201331640, "q": 64818, "g": -0.34891273225011765}, {"d": "2025W1", "s": "2025-12-29", "e": "2025-12-31", "r": 88880050, "q": 38543, "g": NaN}, {"d": "2026W1", "s": "2026-01-01", "e": "2026-01-04", "r": 71898070, "q": 26583, "g": -0.6428873772646962}, {"d": "2026W2", "s": "2026-01-05", "e": "2026-01-11", "r": 220639880, "q": 84578, "g": 2.0687872428286322}, {"d": "2026W3", "s": "2026-01-12", "e": "2026-01-18", "r": 186873810, "q": 87913, "g": -0.1530370212311573}, {"d": "2026W4", "s": "2026-01-19", "e": "2026-01-25", "r": 251413795, "q": 110652, "g": 0.34536666748540096}, {"d": "2026W5", "s": "2026-01-26", "e": "2026-02-01", "r": 258055215, "q": 133176, "g": 0.026416291118790836}, {"d": "2026W6", "s": "2026-02-02", "e": "2026-02-08", "r": 267653670, "q": 181387, "g": 0.03719535371528919}, {"d": "2026W7", "s": "2026-02-09", "e": "2026-02-15", "r": 354365400, "q": 145963, "g": 0.32396988989540104}, {"d": "2026W8", "s": "2026-02-16", "e": "2026-02-22", "r": 178251690, "q": 137566, "g": -0.4969833680150489}, {"d": "2026W9", "s": "2026-02-23", "e": "2026-03-01", "r": 288753900, "q": 148248, "g": 0.6199223693194718}, {"d": "2026W10", "s": "2026-03-02", "e": "2026-03-08", "r": 221747335, "q": 141148, "g": -0.232054233726367}, {"d": "2026W11", "s": "2026-03-09", "e": "2026-03-15", "r": 376357910, "q": 139523, "g": 0.697237578976992}, {"d": "2026W12", "s": "2026-03-16", "e": "2026-03-22", "r": 236708220, "q": 113672, "g": -0.3710555465673619}, {"d": "2026W13", "s": "2026-03-23", "e": "2026-03-29", "r": 282100005, "q": 132688, "g": 0.1917626054557801}, {"d": "2026W14", "s": "2026-03-30", "e": "2026-04-05", "r": 271721440, "q": 135486, "g": -0.0367903751011986}, {"d": "2026W15", "s": "2026-04-06", "e": "2026-04-12", "r": 282234215, "q": 134623, "g": 0.038689530719401455}, {"d": "2026W16", "s": "2026-04-13", "e": "2026-04-19", "r": 301018513, "q": 139339, "g": 0.06655570799592814}, {"d": "2026W17", "s": "2026-04-20", "e": "2026-04-26", "r": 294235015, "q": 147800, "g": -0.02253515218181946}, {"d": "2026W18", "s": "2026-04-27", "e": "2026-05-03", "r": 351462497, "q": 227910, "g": 0.19449582504651935}, {"d": "2026W19", "s": "2026-05-04", "e": "2026-05-10", "r": 299850365, "q": 144022, "g": -0.14684961394330504}, {"d": "2026W20", "s": "2026-05-11", "e": "2026-05-17", "r": 322399780, "q": 196109, "g": 0.07520222628376658}, {"d": "2026W21", "s": "2026-05-18", "e": "2026-05-21", "r": 245576070, "q": 157129, "g": -0.23828710429020764}], "stores": [{"n": "이브네", "r": 2775944690, "q": 3071, "p": 20.44}, {"n": "소나타", "r": 540953702, "q": 45245, "p": 3.98}, {"n": "엠유에스", "r": 483010500, "q": 110425, "p": 3.56}, {"n": "남군점빵", "r": 426160140, "q": 138738, "p": 3.14}, {"n": "대지꿀꿀집", "r": 358878600, "q": 83603, "p": 2.64}, {"n": "릴리", "r": 356616450, "q": 108836, "p": 2.63}, {"n": "챌렉트", "r": 328163200, "q": 41399, "p": 2.42}, {"n": "젤리젤리", "r": 283449800, "q": 167399, "p": 2.09}, {"n": "홀릭", "r": 274446500, "q": 71934, "p": 2.02}, {"n": "귀요미", "r": 242843950, "q": 184877, "p": 1.79}, {"n": "황스타", "r": 223426500, "q": 57724, "p": 1.65}, {"n": "옐로맨션", "r": 194138200, "q": 66376, "p": 1.43}, {"n": "솜사탕", "r": 180209200, "q": 52130, "p": 1.33}, {"n": "졸리", "r": 177637500, "q": 14896, "p": 1.31}, {"n": "라팡", "r": 171870600, "q": 55831, "p": 1.27}, {"n": "삼보상사", "r": 143620250, "q": 31532, "p": 1.06}, {"n": "천사", "r": 140222400, "q": 40004, "p": 1.03}, {"n": "에브리띵", "r": 134515150, "q": 74325, "p": 0.99}, {"n": "햇빛", "r": 125226700, "q": 64515, "p": 0.92}, {"n": "루씨드", "r": 125167850, "q": 62288, "p": 0.92}], "cats": [{"n": "키링/가방악세사리", "r": 2841843360, "q": 910512, "p": 20.93}, {"n": "귀걸이(침) 부자재", "r": 1613321990, "q": 23968, "p": 11.88}, {"n": "실버925", "r": 714856301, "q": 94251, "p": 5.26}, {"n": "모바일악세사리", "r": 638380590, "q": 240808, "p": 4.7}, {"n": "드롭", "r": 614138000, "q": 6153, "p": 4.52}, {"n": "파우치/파우치백", "r": 507811940, "q": 128685, "p": 3.74}, {"n": "기타", "r": 384276470, "q": 177014, "p": 2.83}, {"n": "컵/잔/머그", "r": 301634660, "q": 61360, "p": 2.22}, {"n": "집게핀", "r": 280510460, "q": 151835, "p": 2.07}, {"n": "곱창밴드", "r": 252074770, "q": 188133, "p": 1.86}, {"n": "핀", "r": 233903550, "q": 108372, "p": 1.72}, {"n": "긴소매", "r": 203987600, "q": 1812, "p": 1.5}, {"n": "바지", "r": 198440100, "q": 15570, "p": 1.46}, {"n": "티셔츠/나시", "r": 186532850, "q": 10975, "p": 1.37}, {"n": "티셔츠", "r": 167064200, "q": 16064, "p": 1.23}], "prods": [{"rank": 1, "id": 322726, "name": "부자재/뷰티미용", "store": "이브네", "cat": "귀걸이(침) 부자재", "r": 1612817190, "q": 1060}, {"rank": 2, "id": 322727, "name": "악세사리", "store": "이브네", "cat": "드롭", "r": 595461000, "q": 211}, {"rank": 3, "id": 322725, "name": "의류", "store": "이브네", "cat": "긴소매", "r": 196196500, "q": 874}, {"rank": 4, "id": 322693, "name": "홈데코/라이프", "store": "이브네", "cat": "커튼/블라인드", "r": 129893000, "q": 152}, {"rank": 5, "id": 322698, "name": "반려동물", "store": "이브네", "cat": "티셔츠/나시", "r": 97253500, "q": 150}, {"rank": 6, "id": 322720, "name": "패션잡화", "store": "이브네", "cat": "핀", "r": 90699000, "q": 330}, {"rank": 7, "id": 686285, "name": "실버925 하트 큐빅 도넛 목걸이 N", "store": "졸리", "cat": "실버925", "r": 45105000, "q": 3397}, {"rank": 8, "id": 322629, "name": "식품", "store": "이브네", "cat": "농산가공품", "r": 39262000, "q": 250}, {"rank": 9, "id": 20089, "name": "바나나 투웨이 진주 스터드 귀걸이18", "store": "바나나", "cat": "스터드", "r": 25744500, "q": 7282}, {"rank": 10, "id": 575264, "name": "미피 키링 8cm 미피키링 태닝미피", "store": "큐티피아", "cat": "키링/가방악세사리", "r": 21352500, "q": 4745}, {"rank": 11, "id": 737891, "name": "태닝키티 열쇠고리 악세사리케이스", "store": "남군점빵", "cat": "수납케이스", "r": 19555200, "q": 9312}, {"rank": 12, "id": 696669, "name": "제주??감귤 한라봉 귤키티 키링", "store": "에브리띵", "cat": "모바일악세사리", "r": 18132500, "q": 7253}, {"rank": 13, "id": 445919, "name": "정품8cm미피키링", "store": "솜사탕", "cat": "키링/가방악세사리", "r": 18036000, "q": 4008}, {"rank": 14, "id": 844052, "name": "미피정품 구운빵미피 키링 8cm", "store": "큐티피아", "cat": "키링/가방악세사리", "r": 16709000, "q": 3038}, {"rank": 15, "id": 77336, "name": "손뚱 머그컵(3Color)", "store": "삼보상사", "cat": "컵/잔/머그", "r": 13736600, "q": 323}, {"rank": 16, "id": 322716, "name": "아동복", "store": "이브네", "cat": "티셔츠", "r": 13465000, "q": 35}, {"rank": 17, "id": 763083, "name": "땡처리 2026년 산리오 탁상달력 1", "store": "남군점빵", "cat": "기타", "r": 12952500, "q": 4505}, {"rank": 18, "id": 785036, "name": "실버925 더블 리본 목걸이 N230", "store": "졸리", "cat": "실버925", "r": 12891000, "q": 995}, {"rank": 19, "id": 594842, "name": "(버터나이프입고)롬버스 티스푼,티포크", "store": "삼보상사", "cat": "커트러리", "r": 12643400, "q": 6436}, {"rank": 20, "id": 763365, "name": "3세대 라부부 인기캐릭터 인형 키링 ", "store": "포항사", "cat": "기타", "r": 11544000, "q": 1924}, {"rank": 21, "id": 725328, "name": "셀룰로오스 동물 채소 18종 머리빗 ", "store": "귀요미", "cat": "헤어용품/기기", "r": 11462400, "q": 5397}, {"rank": 22, "id": 910639, "name": "하이냥무전기세트(키티)", "store": "홀릭", "cat": "키링/가방악세사리", "r": 11252500, "q": 1381}, {"rank": 23, "id": 443194, "name": "고양이5종신상틴케이스(신상)", "store": "엠유에스", "cat": "보관함/케이스", "r": 10809000, "q": 2402}, {"rank": 24, "id": 247111, "name": "감자키링", "store": "샬롬공예", "cat": "키링/가방악세사리", "r": 10266000, "q": 3422}, {"rank": 25, "id": 452162, "name": "세라믹마블컵", "store": "남군점빵", "cat": "컵/잔/머그", "r": 10208000, "q": 3520}, {"rank": 26, "id": 742304, "name": "태닝키티 다용도 케이스", "store": "남군점빵", "cat": "파우치/파우치백", "r": 10140900, "q": 4829}, {"rank": 27, "id": 778410, "name": "토스트??키티 쿠마 맥세이프 그립톡", "store": "릴리", "cat": "모바일악세사리", "r": 10055500, "q": 2861}, {"rank": 28, "id": 608192, "name": "SS신상고양이4종맥세이프", "store": "엠유에스", "cat": "모바일악세사리", "r": 9760500, "q": 2169}, {"rank": 29, "id": 718655, "name": "애옹이 6종 소스볼  4p한세트", "store": "남군점빵", "cat": "코스터/받침", "r": 9477500, "q": 1115}, {"rank": 30, "id": 890815, "name": "(KC인증완료,일본정품) 몬치치 미니", "store": "옐로맨션", "cat": "완구/인형", "r": 9414500, "q": 1140}], "events": [{"id": 1821, "name": "4월_키캡", "start": "2026-03-24", "end": "2026-04-20", "rev": 5823650, "qty": 2659, "prev_rev": 0, "days": 28, "prods": 122, "growth": null}, {"id": 1841, "name": "5월_장난감/문구/완구", "start": "2026-04-20", "end": "2026-05-03", "rev": 5552600, "qty": 1669, "prev_rev": 0, "days": 14, "prods": 206, "growth": null}, {"id": 1869, "name": "5월_기분 전환 딸깍, 키링", "start": "2026-05-15", "end": "2026-05-28", "rev": 2255700, "qty": 942, "prev_rev": 0, "days": 14, "prods": 129, "growth": null}, {"id": 1842, "name": "5월_비즈/스톤 목걸이", "start": "2026-04-20", "end": "2026-05-18", "rev": 1940600, "qty": 455, "prev_rev": 0, "days": 29, "prods": 76, "growth": null}, {"id": 1836, "name": "4월_틴케이스", "start": "2026-04-13", "end": "2026-05-11", "rev": 1752600, "qty": 573, "prev_rev": 19000, "days": 29, "prods": 94, "growth": 9124.2}, {"id": 1871, "name": "5월_환영받는 집들이 선물", "start": "2026-05-15", "end": "2026-05-28", "rev": 1387150, "qty": 298, "prev_rev": 201500, "days": 14, "prods": 102, "growth": 588.4}, {"id": 1864, "name": "5월_태닝 캐릭터전", "start": "2026-05-07", "end": "2026-05-21", "rev": 582500, "qty": 263, "prev_rev": 22500, "days": 15, "prods": 31, "growth": 2488.9}, {"id": 1862, "name": "5월_반다나&선글라스", "start": "2026-05-07", "end": "2026-05-21", "rev": 468300, "qty": 125, "prev_rev": 335800, "days": 15, "prods": 82, "growth": 39.5}, {"id": 1834, "name": "4월_아이웨어", "start": "2026-04-13", "end": "2026-05-18", "rev": 424800, "qty": 66, "prev_rev": 0, "days": 36, "prods": 74, "growth": null}, {"id": 1840, "name": "5월_여름 신상 반팔", "start": "2026-04-20", "end": "2026-05-13", "rev": 217000, "qty": 19, "prev_rev": 0, "days": 24, "prods": 93, "growth": null}, {"id": 1851, "name": "4월_여름 신발 모음zip.", "start": "2026-04-29", "end": "2026-05-14", "rev": 189000, "qty": 9, "prev_rev": 50000, "days": 16, "prods": 128, "growth": 278.0}, {"id": 1833, "name": "4월_레이스 상의", "start": "2026-04-13", "end": "2026-05-13", "rev": 117000, "qty": 12, "prev_rev": 0, "days": 31, "prods": 91, "growth": null}, {"id": 1861, "name": "5월_의류_살안타 아우터", "start": "2026-05-05", "end": "2026-05-21", "rev": 52000, "qty": 3, "prev_rev": 0, "days": 17, "prods": 60, "growth": null}, {"id": 1868, "name": "5월_세상 편한 플리츠 의류", "start": "2026-05-15", "end": "2026-05-28", "rev": 28000, "qty": 2, "prev_rev": 0, "days": 14, "prods": 69, "growth": null}], "event_details": {"1821": [{"상품ID": 912978, "상품명": "LED 올투명 키캡키링 클리커 노이노이", "매출": 927000, "수량": 594}, {"상품ID": 918907, "상품명": "빅빅 파스텔 LED키캡,빅 클릭커(일반키캡의 1.5배!!사이즈)", "매출": 476000, "수량": 340}, {"상품ID": 907889, "상품명": "도트별 키캡 클릭커 키링", "매출": 409500, "수량": 117}, {"상품ID": 893314, "상품명": "바디 키캡바디 키캡 키링 컬러 키보드 자판 동대문 꾸미기 키캡꾸미기 딸깍이 클리커 LED", "매출": 322500, "수량": 145}, {"상품ID": 910603, "상품명": "LED과일밈키캡키링(재입고완료)", "매출": 238000, "수량": 68}, {"상품ID": 911112, "상품명": "[made.by.tj] 토종 포슬감자 2구 LED키캡,감자 클릭커", "매출": 224000, "수량": 80}, {"상품ID": 913657, "상품명": "LED행운한글메시지키캡키링(신상)", "매출": 217000, "수량": 62}, {"상품ID": 910571, "상품명": "LED영문감성키캡키링(신상)", "매출": 217000, "수량": 62}, {"상품ID": 910980, "상품명": "LED십이간지후로킹키캡키링(재입고완료)", "매출": 210000, "수량": 70}, {"상품ID": 918473, "상품명": "LED 키캡 키꾸 키보드 키보드꾸미기 키캡꾸미기 키링", "매출": 209250, "수량": 93}, {"상품ID": 922012, "상품명": "LED 엘이디 라이트 발광 4구 키캡 파스텔 미니 키보드 키홀더 키링", "매출": 168000, "수량": 84}, {"상품ID": 907887, "상품명": "올리브단추 키캡 클릭커 키링", "매출": 162000, "수량": 36}, {"상품ID": 900940, "상품명": "LED피자키캡키링(피자방향 마지막사진 참고)", "매출": 157500, "수량": 63}, {"상품ID": 899530, "상품명": "현생키캡키링", "매출": 124000, "수량": 62}, {"상품ID": 918927, "상품명": "빅 파스텔 어항키캡 키링LED,파스텔 클릭커 (일반키캡의 1.5배!!사이즈)", "매출": 112000, "수량": 80}], "1841": [{"상품ID": 942964, "상품명": "3가지단가상이) LED 키캡 스피너 키링 _4구 5구 6구 스피너 키캡", "매출": 3018500, "수량": 714}, {"상품ID": 951123, "상품명": "Led 투명 키캡 1구 4구 키캡 키링", "매출": 376000, "수량": 220}, {"상품ID": 947512, "상품명": "(일본정품) 산리오월간신문 이치고신문 2026년 05월호", "매출": 244200, "수량": 66}, {"상품ID": 933059, "상품명": "(일본정품) 산리오 태닝키티 썸머부채", "매출": 235400, "수량": 107}, {"상품ID": 950130, "상품명": "바다 고래 상어 무드등 조명 ??", "매출": 145000, "수량": 10}, {"상품ID": 947600, "상품명": "키티계산기", "매출": 144500, "수량": 17}, {"상품ID": 944839, "상품명": "LED제주st귤키캡키링(신상)", "매출": 115000, "수량": 46}, {"상품ID": 933057, "상품명": "(일본정품) 산리오캐릭터즈 네온사인 썸머부채", "매출": 99000, "수량": 45}, {"상품ID": 933720, "상품명": "정품 산리오 데님 인형키링", "매출": 90000, "수량": 20}, {"상품ID": 938691, "상품명": "LED 사각 4구 구운빵 키캡키링 노이노이", "매출": 75000, "수량": 30}, {"상품ID": 922668, "상품명": "[일시품절] 솜사탕 왁뿌 말랑이 스퀴시 장난감 TYBT603C", "매출": 72000, "수량": 48}, {"상품ID": 935283, "상품명": "(일본정품) 헬로키티 떡메모지 70매입", "매출": 68400, "수량": 38}, {"상품ID": 944008, "상품명": "핑키 산딸기 카드지갑 필통", "매출": 67500, "수량": 12}, {"상품ID": 934221, "상품명": "(일본정품) 헬로키티 슬라이드 미니틴케이스 2p세트", "매출": 57200, "수량": 13}, {"상품ID": 933058, "상품명": "(일본정품) 산리오 하피단부이 썸머부채", "매출": 55000, "수량": 25}], "1869": [{"상품ID": 964444, "상품명": "LED 9구 키캡 키링", "매출": 363500, "수량": 78}, {"상품ID": 961889, "상품명": "키캡 라이트 네잎 클로버 클리커 키캡 키링", "매출": 231000, "수량": 77}, {"상품ID": 947461, "상품명": "네잎 클로버 클릭커 키링 KRBT604Q", "매출": 169200, "수량": 94}, {"상품ID": 954136, "상품명": "SNS핫??메이지 초코릿??뽀각 클리커 키링", "매출": 142800, "수량": 51}, {"상품ID": 907889, "상품명": "도트별 키캡 클릭커 키링", "매출": 119000, "수량": 34}, {"상품ID": 906771, "상품명": "led키캡 과일거북이 4종 키캡키링 클릭커", "매출": 112100, "수량": 59}, {"상품ID": 911279, "상품명": "맥계란클릭커키링", "매출": 100000, "수량": 40}, {"상품ID": 932341, "상품명": "계란감자튀김클릭커키링(신상)", "매출": 92500, "수량": 37}, {"상품ID": 936207, "상품명": "개당1500 신개념 심심풀이 심신안정 초컬릿 딸깍이  키링(군번줄형) 클리커", "매출": 72000, "수량": 6}, {"상품ID": 956067, "상품명": "미니하우스 키캡 키링", "매출": 60000, "수량": 24}, {"상품ID": 923431, "상품명": "(제작)하우스클릭커키링", "매출": 56000, "수량": 14}, {"상품ID": 941026, "상품명": "(제작)빅후르츠거북이클릭커키링", "매출": 54000, "수량": 12}, {"상품ID": 911281, "상품명": "패스트클릭커키링", "매출": 40000, "수량": 10}, {"상품ID": 929196, "상품명": "(제작)스타클릭커키링", "매출": 40000, "수량": 10}, {"상품ID": 919358, "상품명": "클리커 3d프린트 키캡 키링 딸깍이 클릭커", "매출": 40000, "수량": 10}], "1842": [{"상품ID": 933091, "상품명": "볼볼 무광 써지컬스틸 비즈 목걸이 5color", "매출": 385000, "수량": 70}, {"상품ID": 897558, "상품명": "[팬시플라워] 가든 4컬러 베네치아 글라스 꽃 비즈 목걸이", "매출": 210000, "수량": 35}, {"상품ID": 908310, "상품명": "[플라워버튼] 꽃 버튼 도트 단추 원석 비즈 슬라이드 매듭 목걸이", "매출": 182000, "수량": 28}, {"상품ID": 887408, "상품명": "[오로라플라워] 글라스 꽃 플라워 펜던트 써지컬스틸 매듭 목걸이", "매출": 164000, "수량": 41}, {"상품ID": 870458, "상품명": "[심플링] 투웨이 도넛 컬러플 합성원석 비즈 목걸이", "매출": 136500, "수량": 21}, {"상품ID": 935295, "상품명": "꽃 비즈목걸이", "매출": 120000, "수량": 80}, {"상품ID": 831422, "상품명": "하트 호마이카 심플 매듭 목걸이 강추 재주문 많아요", "매출": 116000, "수량": 29}, {"상품ID": 840409, "상품명": "핸드메이드 자체 제작 글라스 꽃 써지컬 볼 써지컬스틸 목걸이", "매출": 108000, "수량": 27}, {"상품ID": 897357, "상품명": "[글라스꽃] 소프트 4컬러 베네치아 글라스 시드 비즈 목걸이", "매출": 102000, "수량": 17}, {"상품ID": 900808, "상품명": "SS원석비즈목걸이(써지컬)", "매출": 52000, "수량": 11}, {"상품ID": 949973, "상품명": "목걸이 비즈목걸이 비즈 구슬 크리스탈 액세서리 소품샵 패션소품 여름 청량함 포인트", "매출": 45000, "수량": 30}, {"상품ID": 922570, "상품명": "원석지르콘비즈목걸이(써지컬)", "매출": 42000, "수량": 6}, {"상품ID": 937046, "상품명": "론델 심플 비즈 목걸이 (2color)", "매출": 35100, "수량": 13}, {"상품ID": 907000, "상품명": "더블유아이 비즈 리본 목걸이", "매출": 35000, "수량": 10}, {"상품ID": 940547, "상품명": "타이니 리본 비즈 목걸이 써지컬)", "매출": 33000, "수량": 6}], "1836": [{"상품ID": 906507, "상품명": "[수입정품] 키티 미니 수납 보관함 케이스 약케이스", "매출": 256000, "수량": 94}, {"상품ID": 712720, "상품명": "(일본정품) 지브리 미니 틴케이스 5종 (칼시퍼추가)", "매출": 195000, "수량": 30}, {"상품ID": 938093, "상품명": "(일본정품) 포차코 여행용 악세서리 보관함 2종", "매출": 173800, "수량": 79}, {"상품ID": 910597, "상품명": "(일본정품) 헬로키티 여행용 악세서리 보관함 2종", "매출": 136400, "수량": 62}, {"상품ID": 830024, "상품명": "토마토 수납 케이스", "매출": 102600, "수량": 38}, {"상품ID": 934221, "상품명": "(일본정품) 헬로키티 슬라이드 미니틴케이스 2p세트", "매출": 96800, "수량": 22}, {"상품ID": 913025, "상품명": "정어리캔 클립세트 (틴케이스+2컬러 정어리클립15매씩 30개입 세트)", "매출": 96000, "수량": 20}, {"상품ID": 909389, "상품명": "카트바구니 바스켓 수납함 철제바구니 디피 소품보관 메탈바구니 정리함 매장디피 E1118", "매출": 79000, "수량": 16}, {"상품ID": 754693, "상품명": "레트로 3단 틴케이스", "매출": 66500, "수량": 19}, {"상품ID": 918150, "상품명": "레트로 패턴 미니 틴케이스(젤리 틴케이스)", "매출": 61000, "수량": 2}, {"상품ID": 668630, "상품명": "파스텔 철제 바구니 소품바구니 트레이", "매출": 54600, "수량": 14}, {"상품ID": 925844, "상품명": "심플 스텐 소품바구니", "매출": 49300, "수량": 17}, {"상품ID": 910587, "상품명": "(일본정품) 헬로키티 크림공케이스15g", "매출": 46200, "수량": 21}, {"상품ID": 909084, "상품명": "(일본정품) 마이멜로디 쥬얼리케이스", "매출": 39600, "수량": 18}, {"상품ID": 880898, "상품명": "2000st감성 틴케이스(마감)", "매출": 30000, "수량": 12}]}};
+
+// ─── STATE ───────────────────────────────────────────────────────
+let D = INIT_DATA;
+let charts = {};
+const COLORS = ['#5b8dee','#8b6ef5','#4dd0a8','#ffb74d','#f06292','#74c0fc','#a9e34b','#ffd43b','#da77f2','#63e6be','#ff8787','#66d9e8','#a0c4ff','#ffbf69','#cbf3f0'];
+
+// ─── UTILS ───────────────────────────────────────────────────────
+const fmt = n => { if(n>=1e9)return(n/1e9).toFixed(1)+'B'; if(n>=1e8)return(n/1e8).toFixed(1)+'억'; if(n>=1e4)return Math.round(n/1e4)+'만'; return n.toLocaleString(); };
+const fmtW = n => Math.round(n).toLocaleString()+'원';
+const pct = n => (n>=0?'+':'')+n.toFixed(1)+'%';
+const kill = id => { if(charts[id]){charts[id].destroy();delete charts[id]} };
+
+Chart.defaults.color='#7a859e';
+Chart.defaults.borderColor='rgba(255,255,255,.04)';
+Chart.defaults.font.family="'Noto Sans KR',sans-serif";
+
+// ─── PAGE NAV ────────────────────────────────────────────────────
+function goPage(name, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  el.classList.add('active');
+  const r={overview:renderOverview,events:renderEvents,stores:renderStores,categories:renderCats,products:renderProds};
+  r[name]?.();
+}
+
+// ─── EXCEL UPLOAD ────────────────────────────────────────────────
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag')});
+zone.addEventListener('dragleave',()=>zone.classList.remove('drag'));
+zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processFile(f)});
+
+function handleUpload(inp){if(inp.files[0])processFile(inp.files[0])}
+
+function processFile(file){
+  const lbl=document.getElementById('uploadLabel');
+  const badge=document.getElementById('statusBadge');
+  lbl.textContent='처리 중...';
+  badge.textContent='● 파싱 중...';
+  badge.style.background='rgba(255,183,77,.1)';
+  badge.style.color='#ffb74d';
+
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const newData=parseWorkbook(wb);
+      if(newData){
+        D=newData;
+        lbl.textContent=file.name+' ✓';
+        badge.textContent='● 업데이트 완료';
+        badge.style.background='rgba(77,208,168,.1)';
+        badge.style.color='#4dd0a8';
+        refreshAll();
+        addMsg('ai','<strong>✅ 엑셀 업데이트 완료!</strong><br>'+file.name+' 데이터가 반영됐어요. 모든 차트와 테이블이 갱신됐습니다.');
+      }
+    }catch(err){
+      badge.textContent='● 파싱 오류';
+      badge.style.color='#f06292';
+      addMsg('ai','<strong>⚠️ 파일 오류:</strong> '+err.message+'<br>기획전_리절트.xlsx 파일을 업로드해주세요.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseWorkbook(wb){
+  const sheets=wb.SheetNames;
+  // Excel 일련번호 → YYYY-MM-DD 변환
+  const s2d=v=>{
+    if(typeof v==='number'){
+      const d=new Date(Math.round((v-25569)*86400000));
+      return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+    }
+    return String(v||'').slice(0,10).replace(' 00:00:00','');
+  };
+
+  // ── 집계 시트 우선 사용 (빠른 경로) ────────────────────────────
+  if(sheets.includes('일별매출요약')&&sheets.includes('매장별매출')){
+    // 1. 일별매출요약
+    const dailyRows=XLSX.utils.sheet_to_json(wb.Sheets['일별매출요약']);
+    const daily=dailyRows.map(r=>({
+      d:s2d(r['판매일자']),
+      r:Number(r['매출']||0),
+      q:Number(r['판매수량']||0),
+      o:Number(r['주문건수']||0),
+      g:r['전일대비증감률']!=null?+(Number(r['전일대비증감률'])*100).toFixed(2):null
+    })).filter(r=>r.d).sort((a,b)=>a.d<b.d?-1:1);
+
+    // 2. 주간매출요약
+    const weeklyRows=sheets.includes('주간매출요약')?XLSX.utils.sheet_to_json(wb.Sheets['주간매출요약']):[];
+    const weekly=weeklyRows.filter(r=>r['연도']&&r['주차']).map(r=>({
+      d:`${r['연도']}W${r['주차']}`,s:s2d(r['시작일']),e:s2d(r['종료일']),
+      r:Number(r['매출']||0),q:Number(r['판매수량']||0),
+      g:r['전주대비증감률']!=null?Number(r['전주대비증감률']):null
+    }));
+
+    // 3. 매장별매출
+    const storeRows=XLSX.utils.sheet_to_json(wb.Sheets['매장별매출']);
+    const storeTot=storeRows.reduce((s,r)=>s+Number(r['매출']||0),0);
+    const stores=storeRows.sort((a,b)=>Number(b['매출']||0)-Number(a['매출']||0)).slice(0,20).map(r=>({
+      n:r['매장명'],r:Number(r['매출']||0),q:Number(r['판매수량']||0),
+      p:storeTot>0?+(Number(r['매출']||0)/storeTot*100).toFixed(2):0
+    }));
+
+    // 4. 카테고리별매출
+    const catRows=XLSX.utils.sheet_to_json(wb.Sheets['카테고리별매출']);
+    const catTot=catRows.reduce((s,r)=>s+Number(r['매출']||0),0);
+    const cats=catRows.sort((a,b)=>Number(b['매출']||0)-Number(a['매출']||0)).slice(0,15).map(r=>({
+      n:r['카테고리명'],r:Number(r['매출']||0),q:Number(r['판매수량']||0),
+      p:catTot>0?+(Number(r['매출']||0)/catTot*100).toFixed(2):0
+    }));
+
+    // 5. 상품별매출TOP
+    const prodRows=sheets.includes('상품별매출TOP')?XLSX.utils.sheet_to_json(wb.Sheets['상품별매출TOP']):[];
+    const prods=prodRows.filter(r=>r['순위']).sort((a,b)=>Number(a['순위'])-Number(b['순위'])).slice(0,30).map(r=>({
+      rank:Number(r['순위']),id:Number(r['상품ID']),name:r['상품명'],
+      store:r['매장명'],cat:r['카테고리명'],
+      r:Number(r['매출']||0),q:Number(r['판매수량']||0)
+    }));
+
+    // 6. 기획전상품매출 (헤더=6행 → range:5)
+    let events=[],eventDetails={};
+    if(sheets.includes('기획전상품매출')){
+      const evRows=XLSX.utils.sheet_to_json(wb.Sheets['기획전상품매출'],{range:5});
+      const evByID={};
+      evRows.forEach(row=>{
+        const id=Number(row['기획전ID']);
+        if(!id||isNaN(id))return;
+        const pRev=Number(row['기간매출']||0),pQty=Number(row['기간수량']||0),dRev=Number(row['동기간매출']||0);
+        if(!evByID[id])evByID[id]={id,name:String(row['기획전명']||''),start:s2d(row['시작일']),end:s2d(row['종료일']),rev:0,qty:0,prev_rev:0,prods:0};
+        evByID[id].rev+=pRev;evByID[id].qty+=pQty;evByID[id].prev_rev+=dRev;evByID[id].prods++;
+        if(pRev>0){
+          if(!eventDetails[id])eventDetails[id]=[];
+          eventDetails[id].push({상품ID:Number(row['상품ID']),상품명:String(row['상품명']||''),매출:pRev,수량:pQty});
+        }
+      });
+      events=Object.values(evByID).filter(e=>e.rev>0).sort((a,b)=>b.rev-a.rev).map(e=>({
+        ...e,
+        days:Math.max(1,Math.round((new Date(e.end)-new Date(e.start))/86400000)+1),
+        growth:e.prev_rev>0?+((e.rev-e.prev_rev)/e.prev_rev*100).toFixed(1):null
+      }));
+      Object.keys(eventDetails).forEach(id=>{eventDetails[id].sort((a,b)=>b.매출-a.매출);});
+    }
+
+    // 7. 요약 지표
+    const totalRev=daily.reduce((s,d)=>s+d.r,0);
+    const totalOrders=daily.reduce((s,d)=>s+d.o,0);
+    const totalQty=daily.reduce((s,d)=>s+d.q,0);
+    const avgDailyRev=daily.length?Math.round(totalRev/daily.length):0;
+    const recent7=daily.slice(-7),prev7=daily.slice(-14,-7);
+    const rev7=recent7.reduce((s,d)=>s+d.r,0),rev7prev=prev7.reduce((s,d)=>s+d.r,0);
+    return{
+      summary:{total_rev:totalRev,total_orders:totalOrders,total_qty:totalQty,avg_daily_rev:avgDailyRev,rev7,
+        rev7_growth:rev7prev>0?+((rev7-rev7prev)/rev7prev*100).toFixed(1):0},
+      daily:daily.slice(-60),weekly,stores,cats,prods,events,event_details:eventDetails
+    };
+  }
+
+  // ── 폴백: 원본 시트 직접 파싱 ──────────────────────────────────
+  const salesSheet=wb.Sheets['매출원본'];
+  const evSheet=wb.Sheets['기획전원본'];
+  if(!salesSheet||!evSheet)throw new Error('시트를 찾을 수 없어요. 기획전_리절트.xlsx 파일을 업로드해주세요.\n필요 시트: 일별매출요약+매장별매출 또는 매출원본+기획전원본');
+
+  const sales=XLSX.utils.sheet_to_json(salesSheet);
+  const evRaw=XLSX.utils.sheet_to_json(evSheet);
+  const dailyMap={},storeMap={},catMap={};
+  let totalRev=0,totalQty=0;
+  sales.forEach(row=>{
+    const dateStr=s2d(row['판매일자']||'');
+    const rev=Number(row['매출']||0),qty=Number(row['판매수량']||0);
+    const store=row['매장명']||'기타',cat=row['카테고리명']||'기타';
+    totalRev+=rev;totalQty+=qty;
+    if(!dailyMap[dateStr])dailyMap[dateStr]={d:dateStr,r:0,q:0,o:0};
+    dailyMap[dateStr].r+=rev;dailyMap[dateStr].q+=qty;dailyMap[dateStr].o++;
+    if(!storeMap[store])storeMap[store]={n:store,r:0,q:0};
+    storeMap[store].r+=rev;storeMap[store].q+=qty;
+    if(!catMap[cat])catMap[cat]={n:cat,r:0,q:0};
+    catMap[cat].r+=rev;catMap[cat].q+=qty;
+  });
+  const daily=Object.values(dailyMap).sort((a,b)=>a.d<b.d?-1:1);
+  daily.forEach((d,i)=>{d.g=i>0&&daily[i-1].r>0?(d.r-daily[i-1].r)/daily[i-1].r*100:null;});
+  const stores=Object.values(storeMap).sort((a,b)=>b.r-a.r).slice(0,20);
+  const totalRevAll=stores.reduce((s,x)=>s+x.r,0);
+  stores.forEach(s=>{s.p=+(s.r/totalRevAll*100).toFixed(2);});
+  const cats=Object.values(catMap).sort((a,b)=>b.r-a.r).slice(0,15);
+  cats.forEach(c=>{c.p=+(c.r/totalRevAll*100).toFixed(2);});
+  const evByID2={};
+  evRaw.forEach(row=>{
+    const id=row['기획전ID'];
+    if(!evByID2[id])evByID2[id]={id,name:row['기획전명'],start:s2d(row['시작일']),end:s2d(row['종료일']),prods:[],rev:0,qty:0,prev_rev:0};
+    evByID2[id].prods.push(row['상품ID']);
+  });
+  const salesByProd={};
+  sales.forEach(row=>{
+    const pid=row['상품ID'],dateStr=s2d(row['판매일자']||'');
+    if(!salesByProd[pid])salesByProd[pid]=[];
+    salesByProd[pid].push({d:dateStr,r:Number(row['매출']||0),q:Number(row['판매수량']||0),n:row['상품명']||''});
+  });
+  Object.values(evByID2).forEach(ev=>{
+    ev.prods.forEach(pid=>{(salesByProd[pid]||[]).forEach(s=>{if(s.d>=ev.start&&s.d<=ev.end){ev.rev+=s.r;ev.qty+=s.q;}});});
+    ev.days=(new Date(ev.end)-new Date(ev.start))/86400000+1;
+    ev.growth=ev.prev_rev>0?+((ev.rev-ev.prev_rev)/ev.prev_rev*100).toFixed(1):null;
+  });
+  const events2=Object.values(evByID2).filter(e=>e.rev>0).sort((a,b)=>b.rev-a.rev);
+  const avgDailyRev2=daily.length?Math.round(totalRev/daily.length):0;
+  const recent7=daily.slice(-7),prev7=daily.slice(-14,-7);
+  const rev7=recent7.reduce((s,d)=>s+d.r,0),rev7prev=prev7.reduce((s,d)=>s+d.r,0);
+  return{
+    summary:{total_rev:totalRev,total_orders:sales.length,total_qty:totalQty,avg_daily_rev:avgDailyRev2,rev7,
+      rev7_growth:rev7prev>0?+((rev7-rev7prev)/rev7prev*100).toFixed(1):0},
+    daily:daily.slice(-60),weekly:D.weekly,stores,cats,prods:D.prods,events:events2,event_details:{}
+  };
+}
+
+function refreshAll(){
+  Object.values(charts).forEach(c=>c.destroy());
+  charts={};
+  document.querySelectorAll('[data-rendered]').forEach(e=>e.removeAttribute('data-rendered'));
+  document.querySelectorAll('.page.active').forEach(p=>{
+    const id=p.id.replace('page-','');
+    const r={overview:renderOverview,events:renderEvents,stores:renderStores,categories:renderCats,products:renderProds};
+    r[id]?.();
+  });
+}
+
+// ─── RENDER OVERVIEW ────────────────────────────────────────────
+function renderOverview(){
+  const s=D.summary;
+  document.getElementById('kpiRow').innerHTML=`
+    <div class="kpi" style="--kc:#5b8dee">
+      <div class="kpi-lbl">전체 누적 매출</div>
+      <div class="kpi-val">${fmt(s.total_rev)}</div>
+      <div class="kpi-sub">${fmtW(s.total_rev)}</div>
+    </div>
+    <div class="kpi" style="--kc:#8b6ef5">
+      <div class="kpi-lbl">전체 주문 건수</div>
+      <div class="kpi-val">${s.total_orders.toLocaleString()}</div>
+      <div class="kpi-sub">총 주문</div>
+    </div>
+    <div class="kpi" style="--kc:#4dd0a8">
+      <div class="kpi-lbl">전체 판매 수량</div>
+      <div class="kpi-val">${fmt(s.total_qty)}</div>
+      <div class="kpi-sub">${s.total_qty.toLocaleString()}개</div>
+    </div>
+    <div class="kpi" style="--kc:#ffb74d">
+      <div class="kpi-lbl">일 평균 매출</div>
+      <div class="kpi-val">${fmt(s.avg_daily_rev)}</div>
+      <div class="kpi-sub">${fmtW(s.avg_daily_rev)}</div>
+    </div>
+    <div class="kpi" style="--kc:#f06292">
+      <div class="kpi-lbl">최근 7일 매출</div>
+      <div class="kpi-val">${fmt(s.rev7)}</div>
+      <div class="kpi-sub"><span class="${s.rev7_growth>=0?'up':'down'}">${pct(s.rev7_growth)}</span> vs 전주</div>
+    </div>`;
+
+  kill('daily'); kill('weekly'); kill('catDoughnut');
+
+  const daily=D.daily;
+  charts.daily=new Chart(document.getElementById('dailyChart'),{
+    type:'bar',data:{
+      labels:daily.map(d=>d.d.slice(5)),
+      datasets:[{
+        label:'매출',data:daily.map(d=>d.r),
+        backgroundColor:daily.map(d=>d.g==null?'rgba(91,141,238,.5)':d.g>=0?'rgba(77,208,168,.55)':'rgba(240,98,146,.55)'),
+        borderRadius:3,borderSkipped:false,order:2,
+      },{
+        label:'추세',data:daily.map(d=>d.r),type:'line',
+        borderColor:'rgba(139,110,245,.6)',backgroundColor:'rgba(139,110,245,.05)',
+        borderWidth:2,pointRadius:0,fill:true,tension:.4,order:1,
+      }]
+    },options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>ctx.datasetIndex===0?'  매출: '+fmtW(ctx.raw):'',afterLabel:ctx=>{if(ctx.datasetIndex!==0)return'';const d=daily[ctx.dataIndex];return['  수량: '+d.q.toLocaleString()+'개','  주문: '+d.o.toLocaleString()+'건',(d.g!=null?'  전일비: '+pct(d.g):'')].filter(Boolean)}}}},scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{maxTicksLimit:15,font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{callback:v=>fmt(v),font:{size:10}}}}}
+  });
+
+  const weekly=D.weekly.slice(-20);
+  charts.weekly=new Chart(document.getElementById('weeklyChart'),{
+    type:'line',data:{
+      labels:weekly.map(w=>w.d),
+      datasets:[{label:'주간매출',data:weekly.map(w=>w.r),borderColor:'#5b8dee',backgroundColor:'rgba(91,141,238,.07)',borderWidth:2.5,pointRadius:3,pointBackgroundColor:'#5b8dee',fill:true,tension:.4}]
+    },options:{responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>'  '+fmtW(ctx.raw)}}},scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{maxTicksLimit:8,font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{callback:v=>fmt(v),font:{size:10}}}}}
+  });
+
+  const cats=D.cats.slice(0,8);
+  charts.catDoughnut=new Chart(document.getElementById('catDoughnut'),{
+    type:'doughnut',data:{labels:cats.map(c=>c.n),datasets:[{data:cats.map(c=>c.r),backgroundColor:COLORS.slice(0,8),borderColor:'#13161e',borderWidth:2}]},
+    options:{responsive:false,cutout:'68%',plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10,padding:8}},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>`  ${ctx.label}: ${cats[ctx.dataIndex].p}%`}}}}
+  });
+}
+
+// ─── RENDER EVENTS ───────────────────────────────────────────────
+function renderEvents(){
+  const grid=document.getElementById('evGrid');
+  if(grid.dataset.rendered)return; grid.dataset.rendered='1';
+  const evs=D.events||[];
+  grid.innerHTML=evs.map(ev=>{
+    const gHtml=ev.growth!=null?`<div class="gpill ${ev.growth>=0?'gpos':'gneg'}">${pct(ev.growth)}</div>`:`<div class="gpill gna">N/A</div>`;
+    return`<div class="ev-card" onclick="selectEvent(${ev.id})" id="ec-${ev.id}">${gHtml}
+      <div class="ev-name">${ev.name}</div>
+      <div class="ev-date">${ev.start} ~ ${ev.end||''} (${ev.days||'?'}일)</div>
+      <div class="ev-stats">
+        <div><div class="ev-stat-l">기간 매출</div><div class="ev-stat-v">${fmt(ev.rev)}</div></div>
+        <div><div class="ev-stat-l">판매 수량</div><div class="ev-stat-v">${(ev.qty||0).toLocaleString()}</div></div>
+        <div><div class="ev-stat-l">등록 상품</div><div class="ev-stat-v">${(ev.prods?.length||ev.prods||0)}개</div></div>
+        <div><div class="ev-stat-l">동기간 매출</div><div class="ev-stat-v">${ev.prev_rev>0?fmt(ev.prev_rev):'-'}</div></div>
+      </div></div>`;
+  }).join('');
+}
+
+function selectEvent(id){
+  const ev=(D.events||[]).find(e=>e.id===id); if(!ev)return;
+  document.querySelectorAll('.ev-card').forEach(c=>c.classList.remove('sel'));
+  document.getElementById('ec-'+id)?.classList.add('sel');
+  const det=D.event_details?.[String(id)]||[];
+  const panel=document.getElementById('detailPanel'); panel.classList.add('open');
+  document.getElementById('detailTitle').textContent=`${ev.name} · ${ev.start}~${ev.end||''} · 매출 ${fmtW(ev.rev)}`;
+  kill('evProd');
+  if(det.length){
+    const top=det.slice(0,12);
+    charts.evProd=new Chart(document.getElementById('evProdChart'),{
+      type:'bar',data:{labels:top.map(p=>(p.상품명||p.name||'').slice(0,14)+'…'),datasets:[{label:'매출',data:top.map(p=>p.매출||p.r||0),backgroundColor:COLORS.slice(0,12),borderRadius:4,borderSkipped:false}]},
+      options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>'  '+fmtW(ctx.raw)+'  /  '+(top[ctx.dataIndex].수량||top[ctx.dataIndex].q||0)+'개'}}},scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{callback:v=>fmt(v),font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}
+    });
+    document.getElementById('evProdTbl').innerHTML=det.map((p,i)=>`<tr><td><span class="rbadge ${i<3?'r'+(i+1):'rn'}">${i+1}</span></td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)">${p.상품명||p.name||''}</td><td class="num">${(p.매출||p.r||0).toLocaleString()}</td><td class="num">${(p.수량||p.q||0).toLocaleString()}</td></tr>`).join('');
+  } else {
+    document.getElementById('evProdTbl').innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--tx3);padding:32px">상품 상세 데이터 없음</td></tr>';
+  }
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeDetail(){document.getElementById('detailPanel').classList.remove('open');document.querySelectorAll('.ev-card').forEach(c=>c.classList.remove('sel'))}
+
+// ─── RENDER STORES ───────────────────────────────────────────────
+function renderStores(){
+  if(document.getElementById('storeTbl').dataset.rendered)return;
+  document.getElementById('storeTbl').dataset.rendered='1';
+  kill('storeBar'); kill('storePie');
+  const stores=D.stores;
+  charts.storeBar=new Chart(document.getElementById('storeBar'),{
+    type:'bar',data:{labels:stores.map(s=>s.n),datasets:[{label:'매출',data:stores.map(s=>s.r),backgroundColor:stores.map((_,i)=>COLORS[i%COLORS.length]+'cc'),borderRadius:4,borderSkipped:false}]},
+    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>'  '+fmtW(ctx.raw)+' ('+stores[ctx.dataIndex].p+'%)'}}},scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{callback:v=>fmt(v),font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}
+  });
+  const t10=stores.slice(0,10);
+  charts.storePie=new Chart(document.getElementById('storePie'),{
+    type:'pie',data:{labels:t10.map(s=>s.n),datasets:[{data:t10.map(s=>s.r),backgroundColor:COLORS.slice(0,10),borderColor:'#13161e',borderWidth:2}]},
+    options:{responsive:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:8,padding:6}},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>`  ${ctx.label}: ${ctx.parsed.toLocaleString()}원`}}}}
+  });
+  const max=stores[0].r;
+  document.getElementById('storeTbl').innerHTML=stores.map((s,i)=>`<tr><td><span class="rbadge ${i<3?'r'+(i+1):'rn'}">${i+1}</span></td><td style="color:var(--tx);font-weight:500">${s.n}</td><td class="num">${s.r.toLocaleString()}</td><td class="num">${s.q.toLocaleString()}</td><td class="num">${s.p}%</td><td><div class="bar-bg"><div class="bar-fg" style="width:${(s.r/max*100).toFixed(1)}%;background:${COLORS[i%COLORS.length]}"></div></div></td></tr>`).join('');
+}
+
+// ─── RENDER CATS ─────────────────────────────────────────────────
+function renderCats(){
+  if(document.getElementById('catTbl').dataset.rendered)return;
+  document.getElementById('catTbl').dataset.rendered='1';
+  kill('catBar'); kill('catQtyBar');
+  const cats=D.cats;
+  charts.catBar=new Chart(document.getElementById('catBar'),{
+    type:'bar',data:{labels:cats.map(c=>c.n.length>9?c.n.slice(0,9)+'…':c.n),datasets:[{label:'매출',data:cats.map(c=>c.r),backgroundColor:cats.map((_,i)=>COLORS[i%COLORS.length]+'bb'),borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>'  '+fmtW(ctx.raw)}}},scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{callback:v=>fmt(v),font:{size:10}}}}}
+  });
+  charts.catQtyBar=new Chart(document.getElementById('catQtyBar'),{
+    type:'bar',data:{labels:cats.map(c=>c.n.length>9?c.n.slice(0,9)+'…':c.n),datasets:[{label:'수량',data:cats.map(c=>c.q),backgroundColor:cats.map((_,i)=>COLORS[(i+5)%COLORS.length]+'bb'),borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#191d28',borderColor:'#2d3450',borderWidth:1,callbacks:{label:ctx=>'  '+ctx.raw.toLocaleString()+'개'}}},scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{callback:v=>v.toLocaleString(),font:{size:10}}}}}
+  });
+  const max=cats[0].r;
+  document.getElementById('catTbl').innerHTML=cats.map((c,i)=>`<tr><td><span class="rbadge ${i<3?'r'+(i+1):'rn'}">${i+1}</span></td><td style="color:var(--tx);font-weight:500"><span class="dot" style="background:${COLORS[i%COLORS.length]}"></span>${c.n}</td><td class="num">${c.r.toLocaleString()}</td><td class="num">${c.q.toLocaleString()}</td><td class="num">${c.p}%</td><td><div class="bar-bg"><div class="bar-fg" style="width:${(c.r/max*100).toFixed(1)}%;background:${COLORS[i%COLORS.length]}"></div></div></td></tr>`).join('');
+}
+
+// ─── RENDER PRODS ────────────────────────────────────────────────
+function renderProds(){
+  if(document.getElementById('prodTbl').dataset.rendered)return;
+  document.getElementById('prodTbl').dataset.rendered='1';
+  document.getElementById('prodTbl').innerHTML=D.prods.map((p,i)=>`<tr><td><span class="rbadge ${i<3?'r'+(i+1):'rn'}">${i+1}</span></td><td style="font-family:var(--mono);font-size:10px;color:var(--tx3)">${p.id}</td><td style="color:var(--tx);font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</td><td style="color:var(--tx2)">${p.store}</td><td><span style="background:rgba(91,141,238,.1);color:var(--ac);padding:2px 7px;border-radius:4px;font-size:10px">${p.cat}</span></td><td class="num" style="color:var(--tx)">${p.r.toLocaleString()}</td><td class="num">${p.q.toLocaleString()}</td></tr>`).join('');
+}
+
+// ─── AI CHAT ─────────────────────────────────────────────────────
+let aiVisible=true;
+function toggleAI(){
+  aiVisible=!aiVisible;
+  document.getElementById('aiPanel').style.display=aiVisible?'':'none';
+  document.getElementById('aiToggle').textContent=aiVisible?'숨기기':'AI 패널';
+}
+
+function addMsg(role,html){
+  const box=document.getElementById('chatMessages');
+  const el=document.createElement('div');
+  el.className='msg msg-'+role;
+  el.innerHTML=html;
+  box.appendChild(el);
+  box.scrollTop=box.scrollHeight;
+  return el;
+}
+
+function quickPrompt(txt){
+  document.getElementById('chatInput').value=txt;
+  sendChat();
+}
+
+const APIKEY_HINT=''; // Anthropic API는 브라우저에서 직접 호출 불가 → 프록시 필요
+// 대신: 규칙 기반 + 시뮬레이션으로 동작
+
+async function sendChat(){
+  const inp=document.getElementById('chatInput');
+  const txt=inp.value.trim(); if(!txt)return;
+  inp.value=''; inp.style.height='auto';
+  document.getElementById('sendBtn').disabled=true;
+
+  addMsg('user',txt);
+  const thinking=addMsg('ai','<span class="msg-thinking">⏳ 분석 중...</span>');
+
+  // Call Anthropic API
+  try{
+    const systemPrompt=`당신은 남도마켓 대시보드 AI 코딩 어시스턴트입니다.
+사용자의 요청을 분석해서 대시보드를 수정하는 JavaScript 코드를 생성하세요.
+
+대시보드 구조:
+- charts 객체: daily, weekly, catDoughnut, storeBar, storePie, catBar, catQtyBar, evProd 차트들
+- Chart.js 4.4.1 사용
+- CSS 변수: --ac(파랑), --ac2(보라), --ac3(핑크), --ac4(초록), --ac5(주황), --tx(텍스트), --bg(배경)
+- COLORS 배열: 기본 색상 팔레트
+- D 객체: 현재 데이터 (D.daily, D.weekly, D.stores, D.cats, D.prods, D.events)
+
+응답 형식 (반드시 이 형식 사용):
+1. 먼저 한국어로 무엇을 할지 짧게 설명 (1-2줄)
+2. 그 다음 코드 블록:
+\`\`\`js
+// 실행할 JavaScript 코드
+\`\`\`
+
+차트 색상 변경 예시:
+\`\`\`js
+if(charts.daily){charts.daily.data.datasets[0].backgroundColor=charts.daily.data.datasets[0].data.map(()=>'rgba(77,208,168,.6)');charts.daily.update();}
+\`\`\`
+
+테마 변경 예시:
+\`\`\`js
+document.documentElement.style.setProperty('--bg','#fff');
+document.documentElement.style.setProperty('--tx','#111');
+\`\`\`
+
+CSS 변수 변경, 차트 데이터/색상/타입 변경, DOM 조작 모두 가능합니다.
+반드시 브라우저에서 바로 실행 가능한 순수 JS만 작성하세요.`;
+
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:systemPrompt,
+        messages:[{role:'user',content:txt}]
+      })
+    });
+
+    const data=await res.json();
+    const reply=data.content?.[0]?.text||'응답을 받지 못했습니다.';
+
+    // Extract and execute JS code
+    const codeMatch=reply.match(/```(?:js|javascript)?\n([\s\S]*?)```/);
+    let resultHtml=reply.replace(/```(?:js|javascript)?\n[\s\S]*?```/g,'<code style="font-family:var(--mono);font-size:10px;color:var(--ac);">[코드 실행됨]</code>');
+    resultHtml=resultHtml.replace(/\n/g,'<br>');
+
+    thinking.innerHTML=resultHtml;
+
+    if(codeMatch){
+      try{
+        eval(codeMatch[1]);
+        const log=document.getElementById('changesLog');
+        log.textContent='마지막 변경: '+txt.slice(0,40)+(txt.length>40?'…':'');
+      }catch(e){
+        addMsg('ai','<span style="color:var(--r)">⚠️ 코드 실행 오류: '+e.message+'</span>');
+      }
+    }
+  }catch(err){
+    thinking.innerHTML='<span style="color:var(--r)">⚠️ API 오류: '+err.message+'<br><br>API 키 설정이 필요합니다. <strong>로컬 서버</strong>나 <strong>프록시</strong>를 통해 실행해주세요.<br><br>또는 아래처럼 직접 명령어를 입력하세요:<br><code style="font-size:10px;font-family:var(--mono);color:var(--ac)">차트색 바꾸기 → "매출 차트 초록색으로"</code></span>';
+    // Fallback: rule-based
+    applyRuleBased(txt,thinking);
+  }
+
+  document.getElementById('sendBtn').disabled=false;
+}
+
+// Rule-based fallback (CORS 우회용)
+function applyRuleBased(txt,msgEl){
+  const t=txt.toLowerCase();
+  let done=false;
+
+  if(t.includes('초록')||t.includes('green')){
+    if(charts.daily){charts.daily.data.datasets[0].backgroundColor=charts.daily.data.datasets[0].data.map(()=>'rgba(77,208,168,.6)');charts.daily.update();}
+    if(charts.weekly){charts.weekly.data.datasets[0].borderColor='#4dd0a8';charts.weekly.data.datasets[0].backgroundColor='rgba(77,208,168,.08)';charts.weekly.update();}
+    msgEl.innerHTML='<strong>✅ 초록색으로 변경!</strong><br>매출 차트 색상을 초록색으로 바꿨어요.'; done=true;
+  } else if(t.includes('파랑')||t.includes('blue')){
+    if(charts.daily){charts.daily.data.datasets[0].backgroundColor=charts.daily.data.datasets[0].data.map(()=>'rgba(91,141,238,.6)');charts.daily.update();}
+    msgEl.innerHTML='<strong>✅ 파란색으로 변경!</strong>'; done=true;
+  } else if(t.includes('막대')||t.includes('bar')){
+    if(charts.weekly){charts.weekly.config.type='bar';charts.weekly.update();}
+    msgEl.innerHTML='<strong>✅ 막대 그래프로 변경!</strong><br>주간 차트를 막대 그래프로 바꿨어요.'; done=true;
+  } else if(t.includes('라인')||t.includes('선')||t.includes('line')){
+    if(charts.weekly){charts.weekly.config.type='line';charts.weekly.update();}
+    msgEl.innerHTML='<strong>✅ 라인 차트로 변경!</strong>'; done=true;
+  } else if(t.includes('다크')||t.includes('어둡')){
+    document.documentElement.style.setProperty('--bg','#060709');
+    document.documentElement.style.setProperty('--s1','#0d0f14');
+    msgEl.innerHTML='<strong>✅ 더 어둡게 변경!</strong><br>배경을 더 진하게 바꿨어요.'; done=true;
+  } else if(t.includes('밝')||t.includes('라이트')||t.includes('light')){
+    document.documentElement.style.setProperty('--bg','#1a1f2e');
+    document.documentElement.style.setProperty('--s1','#232840');
+    msgEl.innerHTML='<strong>✅ 밝게 변경!</strong>'; done=true;
+  } else if(t.includes('만원')||t.includes('단위')){
+    Chart.defaults.plugins={...Chart.defaults.plugins};
+    if(charts.daily){charts.daily.options.scales.y.ticks.callback=v=>Math.round(v/10000)+'만';charts.daily.update();}
+    if(charts.weekly){charts.weekly.options.scales.y.ticks.callback=v=>Math.round(v/10000)+'만';charts.weekly.update();}
+    msgEl.innerHTML='<strong>✅ 만원 단위로 변경!</strong><br>차트 Y축을 만원 단위로 변경했어요.'; done=true;
+  }
+
+  if(!done){
+    msgEl.innerHTML='<strong>💡 직접 API 연동 필요</strong><br>더 복잡한 수정은 API 키 설정 후 가능해요.<br><br>지금 바로 쓸 수 있는 명령:<br>• "초록색으로 바꿔줘"<br>• "막대 그래프로 바꿔줘"<br>• "만원 단위로 보여줘"<br>• "더 어둡게 바꿔줘"';
+  }
+}
+
+// ─── INIT ────────────────────────────────────────────────────────
+renderOverview();
+</script>
+</body>
+</html>
