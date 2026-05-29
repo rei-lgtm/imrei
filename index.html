@@ -187,13 +187,15 @@ canvas{max-height:280px}
 }
 .msg-ai strong{color:var(--tx);font-weight:600}
 .msg-thinking{color:var(--tx3);font-style:italic;font-size:11px}
-.hint-chips{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.hint-chips{display:flex;flex-direction:column;gap:3px;margin-top:4px}
 .chip{
   background:var(--s2);border:1px solid var(--b2);
-  border-radius:8px;padding:6px 10px;font-size:11px;
-  cursor:pointer;color:var(--tx2);transition:all .15s;text-align:left;
+  border-radius:8px;padding:5px 9px;font-size:11px;
+  cursor:pointer;color:var(--tx2);transition:all .15s;text-align:left;white-space:nowrap;
 }
 .chip:hover{border-color:var(--ac);color:var(--ac);background:rgba(38,123,242,.07)}
+.chip-group-label{font-size:9px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-top:7px;padding-left:2px}
+.chip-row{display:flex;flex-wrap:wrap;gap:4px}
 #chatInputRow{
   padding:12px 14px;border-top:1px solid var(--b1);
   display:flex;gap:8px;align-items:flex-end;
@@ -384,12 +386,37 @@ canvas{max-height:280px}
         아래 예시를 클릭하거나 직접 입력해보세요.
       </div>
       <div class="hint-chips">
-        <button class="chip" onclick="quickPrompt(this.textContent)">📊 매출 차트 색깔 초록색으로 바꿔줘</button>
-        <button class="chip" onclick="quickPrompt(this.textContent)">🎯 기획전 중 매출 TOP 3만 하이라이트해줘</button>
-        <button class="chip" onclick="quickPrompt(this.textContent)">📦 카테고리 차트에 수량도 같이 보여줘</button>
-        <button class="chip" onclick="quickPrompt(this.textContent)">🌈 다크 테마 더 진하게 바꿔줘</button>
-        <button class="chip" onclick="quickPrompt(this.textContent)">📈 주간 차트 막대 그래프로 바꿔줘</button>
-        <button class="chip" onclick="quickPrompt(this.textContent)">💰 매출 단위를 만원으로 표시해줘</button>
+        <div class="chip-group-label">색상</div>
+        <div class="chip-row">
+          <button class="chip" onclick="quickPrompt(this.textContent)">🟢 초록색으로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">🔴 빨간색으로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">🟣 보라색으로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">🔵 파란색으로</button>
+        </div>
+        <div class="chip-group-label">차트 타입</div>
+        <div class="chip-row">
+          <button class="chip" onclick="quickPrompt(this.textContent)">📊 막대 그래프로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">📈 라인 차트로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">↔️ 가로 막대로</button>
+        </div>
+        <div class="chip-group-label">단위</div>
+        <div class="chip-row">
+          <button class="chip" onclick="quickPrompt(this.textContent)">💰 만원 단위로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">💹 억원 단위로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">🔄 원래대로 초기화</button>
+        </div>
+        <div class="chip-group-label">테마</div>
+        <div class="chip-row">
+          <button class="chip" onclick="quickPrompt(this.textContent)">🌙 다크 테마로</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">☀️ 라이트 테마로</button>
+        </div>
+        <div class="chip-group-label">기타</div>
+        <div class="chip-row">
+          <button class="chip" onclick="quickPrompt(this.textContent)">🎯 기획전 TOP 3 강조</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">🔤 글씨 크게</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">📋 범례 숨기기</button>
+          <button class="chip" onclick="quickPrompt(this.textContent)">👁 범례 보이기</button>
+        </div>
       </div>
     </div>
     <div id="changesLog"></div>
@@ -890,36 +917,125 @@ function applyRuleBased(txt,msgEl){
   const t=txt.toLowerCase();
   let done=false;
 
+  // 모든 주요 차트 색상 일괄 변경
+  const setColor=(fill,stroke)=>{
+    [charts.daily,charts.weekly,charts.storeBar,charts.catBar].filter(Boolean).forEach(c=>{
+      if(!c.data.datasets[0])return;
+      if(c.config.type==='line'){
+        c.data.datasets[0].borderColor=stroke;
+        c.data.datasets[0].backgroundColor=fill.replace(/[\d.]+\)$/,'.08)');
+      } else {
+        c.data.datasets[0].backgroundColor=c.data.datasets[0].data.map(()=>fill);
+      }
+      c.update();
+    });
+  };
+
+  // ── 색상 ──────────────────────────────────────
   if(t.includes('초록')||t.includes('green')){
-    if(charts.daily){charts.daily.data.datasets[0].backgroundColor=charts.daily.data.datasets[0].data.map(()=>'rgba(77,208,168,.6)');charts.daily.update();}
-    if(charts.weekly){charts.weekly.data.datasets[0].borderColor='#4dd0a8';charts.weekly.data.datasets[0].backgroundColor='rgba(77,208,168,.08)';charts.weekly.update();}
-    msgEl.innerHTML='<strong>✅ 초록색으로 변경!</strong><br>매출 차트 색상을 초록색으로 바꿨어요.'; done=true;
-  } else if(t.includes('파랑')||t.includes('blue')){
-    if(charts.daily){charts.daily.data.datasets[0].backgroundColor=charts.daily.data.datasets[0].data.map(()=>'rgba(38,123,242,.6)');charts.daily.update();}
-    msgEl.innerHTML='<strong>✅ 파란색으로 변경!</strong>'; done=true;
+    setColor('rgba(0,168,120,.55)','#00A878');
+    msgEl.innerHTML='<strong>✅ 초록색으로 변경!</strong><br>차트 색상을 초록색으로 바꿨어요.'; done=true;
+  } else if(t.includes('빨강')||t.includes('빨간')||t.includes('red')){
+    setColor('rgba(230,48,96,.55)','#E63060');
+    msgEl.innerHTML='<strong>✅ 빨간색으로 변경!</strong><br>차트 색상을 빨간색으로 바꿨어요.'; done=true;
+  } else if(t.includes('보라')||t.includes('purple')){
+    setColor('rgba(139,92,246,.55)','#8B5CF6');
+    msgEl.innerHTML='<strong>✅ 보라색으로 변경!</strong><br>차트 색상을 보라색으로 바꿨어요.'; done=true;
+  } else if(t.includes('파랑')||t.includes('파란')||t.includes('blue')){
+    setColor('rgba(38,123,242,.55)','#267BF2');
+    msgEl.innerHTML='<strong>✅ 파란색으로 변경!</strong><br>차트 색상을 파란색으로 바꿨어요.'; done=true;
+  }
+
+  // ── 차트 타입 ─────────────────────────────────
+  else if(t.includes('가로')){
+    if(charts.daily){charts.daily.options.indexAxis='y';charts.daily.update();}
+    msgEl.innerHTML='<strong>✅ 가로 막대로 변경!</strong><br>일별 차트를 가로 막대 그래프로 바꿨어요.'; done=true;
   } else if(t.includes('막대')||t.includes('bar')){
     if(charts.weekly){charts.weekly.config.type='bar';charts.weekly.update();}
     msgEl.innerHTML='<strong>✅ 막대 그래프로 변경!</strong><br>주간 차트를 막대 그래프로 바꿨어요.'; done=true;
-  } else if(t.includes('라인')||t.includes('선')||t.includes('line')){
+  } else if(t.includes('라인')||t.includes('line')){
     if(charts.weekly){charts.weekly.config.type='line';charts.weekly.update();}
-    msgEl.innerHTML='<strong>✅ 라인 차트로 변경!</strong>'; done=true;
-  } else if(t.includes('다크')||t.includes('어둡')){
-    document.documentElement.style.setProperty('--bg','#060709');
-    document.documentElement.style.setProperty('--s1','#0d0f14');
-    msgEl.innerHTML='<strong>✅ 더 어둡게 변경!</strong><br>배경을 더 진하게 바꿨어요.'; done=true;
-  } else if(t.includes('밝')||t.includes('라이트')||t.includes('light')){
-    document.documentElement.style.setProperty('--bg','#1a1f2e');
-    document.documentElement.style.setProperty('--s1','#232840');
-    msgEl.innerHTML='<strong>✅ 밝게 변경!</strong>'; done=true;
-  } else if(t.includes('만원')||t.includes('단위')){
-    Chart.defaults.plugins={...Chart.defaults.plugins};
-    if(charts.daily){charts.daily.options.scales.y.ticks.callback=v=>Math.round(v/10000)+'만';charts.daily.update();}
-    if(charts.weekly){charts.weekly.options.scales.y.ticks.callback=v=>Math.round(v/10000)+'만';charts.weekly.update();}
+    msgEl.innerHTML='<strong>✅ 라인 차트로 변경!</strong><br>주간 차트를 라인 차트로 바꿨어요.'; done=true;
+  }
+
+  // ── 단위 ──────────────────────────────────────
+  else if(t.includes('억')){
+    [charts.daily,charts.weekly,charts.catBar].filter(Boolean).forEach(c=>{
+      if(c.options.scales?.y)c.options.scales.y.ticks.callback=v=>+(v/100000000).toFixed(1)+'억';
+      c.update();
+    });
+    msgEl.innerHTML='<strong>✅ 억원 단위로 변경!</strong><br>차트 Y축을 억원 단위로 변경했어요.'; done=true;
+  } else if(t.includes('만원')||t.includes('만 원')){
+    [charts.daily,charts.weekly,charts.catBar].filter(Boolean).forEach(c=>{
+      if(c.options.scales?.y)c.options.scales.y.ticks.callback=v=>Math.round(v/10000)+'만';
+      c.update();
+    });
     msgEl.innerHTML='<strong>✅ 만원 단위로 변경!</strong><br>차트 Y축을 만원 단위로 변경했어요.'; done=true;
+  } else if(t.includes('원래')||t.includes('초기화')||t.includes('리셋')){
+    if(charts.weekly)charts.weekly.config.type='line';
+    [charts.daily,charts.weekly,charts.storeBar,charts.catBar,charts.catDoughnut,charts.storePie].filter(Boolean).forEach(c=>{
+      if(c.options.scales?.y)c.options.scales.y.ticks.callback=undefined;
+      if(c.options.indexAxis)delete c.options.indexAxis;
+      c.options.plugins.legend.display=false;
+      c.update();
+    });
+    Object.entries({'--bg':'#EEF3FB','--s1':'#FFFFFF','--s2':'#F5F8FF','--s3':'#EBF2FF','--b1':'#D6E3F5','--b2':'#BDD0EE','--tx':'#0D1B3E','--tx2':'#4A5C80','--tx3':'#8BA0C4'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+    document.querySelectorAll('.kpi-val,.kpi-label,.stat-label').forEach(el=>el.style.fontSize='');
+    document.querySelectorAll('.ev-card').forEach(el=>{el.style.outline='';el.style.boxShadow='';});
+    msgEl.innerHTML='<strong>✅ 초기화 완료!</strong><br>대시보드를 원래 상태로 되돌렸어요.'; done=true;
+  }
+
+  // ── 테마 ──────────────────────────────────────
+  else if(t.includes('다크')||t.includes('어둡')||t.includes('dark')){
+    Object.entries({'--bg':'#0d1117','--s1':'#161b27','--s2':'#1c2333','--s3':'#222a3d','--b1':'#2a3550','--b2':'#344265','--tx':'#e6edf3','--tx2':'#8b949e','--tx3':'#586069'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+    msgEl.innerHTML='<strong>✅ 다크 테마 적용!</strong><br>대시보드를 다크 모드로 바꿨어요.'; done=true;
+  } else if(t.includes('라이트')||t.includes('밝')||t.includes('light')){
+    Object.entries({'--bg':'#EEF3FB','--s1':'#FFFFFF','--s2':'#F5F8FF','--s3':'#EBF2FF','--b1':'#D6E3F5','--b2':'#BDD0EE','--tx':'#0D1B3E','--tx2':'#4A5C80','--tx3':'#8BA0C4'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+    msgEl.innerHTML='<strong>✅ 라이트 테마 적용!</strong><br>대시보드를 라이트 모드로 바꿨어요.'; done=true;
+  }
+
+  // ── 기획전 TOP 3 강조 ─────────────────────────
+  else if(t.includes('기획전')||t.includes('하이라이트')||(t.includes('top')&&t.includes('강조'))){
+    const evs=D.events||[];
+    if(evs.length){
+      const top3ids=new Set([...evs].sort((a,b)=>b.rev-a.rev).slice(0,3).map(e=>e.id));
+      document.querySelectorAll('.ev-card').forEach(el=>{
+        const id=parseInt(el.id.replace('ec-',''));
+        el.style.outline=top3ids.has(id)?'2px solid var(--ac)':'none';
+        el.style.boxShadow=top3ids.has(id)?'0 0 0 4px rgba(38,123,242,.15)':'none';
+      });
+      const names=[...evs].sort((a,b)=>b.rev-a.rev).slice(0,3).map((e,i)=>`${i+1}. ${e.name}`).join('<br>');
+      msgEl.innerHTML=`<strong>✅ TOP 3 하이라이트!</strong><br>매출 상위 3개 기획전을 강조했어요:<br>${names}`; done=true;
+    } else {
+      msgEl.innerHTML='<strong>⚠️ 기획전 탭을 먼저 열어주세요.</strong>'; done=true;
+    }
+  }
+
+  // ── 글씨 크기 ─────────────────────────────────
+  else if(t.includes('글씨')&&(t.includes('크게')||t.includes('크다'))){
+    document.querySelectorAll('.kpi-val').forEach(el=>el.style.fontSize='2rem');
+    document.querySelectorAll('.kpi-label,.stat-label').forEach(el=>el.style.fontSize='13px');
+    msgEl.innerHTML='<strong>✅ 글씨 크게!</strong><br>KPI 수치와 라벨을 키웠어요.'; done=true;
+  }
+
+  // ── 범례 ──────────────────────────────────────
+  else if(t.includes('범례')&&(t.includes('숨')||t.includes('없애')||t.includes('제거'))){
+    [charts.daily,charts.weekly,charts.storeBar,charts.catBar,charts.catDoughnut,charts.storePie].filter(Boolean).forEach(c=>{c.options.plugins.legend.display=false;c.update();});
+    msgEl.innerHTML='<strong>✅ 범례 숨김!</strong><br>모든 차트의 범례를 숨겼어요.'; done=true;
+  } else if(t.includes('범례')&&(t.includes('보이')||t.includes('보여')||t.includes('표시'))){
+    [charts.daily,charts.weekly,charts.storeBar,charts.catBar,charts.catDoughnut,charts.storePie].filter(Boolean).forEach(c=>{c.options.plugins.legend.display=true;c.update();});
+    msgEl.innerHTML='<strong>✅ 범례 표시!</strong><br>모든 차트의 범례를 보이게 했어요.'; done=true;
   }
 
   if(!done){
-    msgEl.innerHTML='<strong>💡 직접 API 연동 필요</strong><br>더 복잡한 수정은 API 키 설정 후 가능해요.<br><br>지금 바로 쓸 수 있는 명령:<br>• "초록색으로 바꿔줘"<br>• "막대 그래프로 바꿔줘"<br>• "만원 단위로 보여줘"<br>• "더 어둡게 바꿔줘"';
+    msgEl.innerHTML='<strong>💡 사용 가능한 명령어</strong><br>'
+      +'<b>색상:</b> 초록/빨간/파란/보라색으로 바꿔줘<br>'
+      +'<b>차트:</b> 막대/라인/가로 그래프로 바꿔줘<br>'
+      +'<b>단위:</b> 만원/억원 단위로 보여줘<br>'
+      +'<b>테마:</b> 다크/라이트 테마로 바꿔줘<br>'
+      +'<b>기획전:</b> 기획전 TOP 3 강조해줘<br>'
+      +'<b>기타:</b> 글씨 크게, 범례 숨겨줘/보여줘<br>'
+      +'<b>초기화:</b> 원래대로 돌려줘';
   }
 }
 
